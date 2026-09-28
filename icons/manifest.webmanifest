@@ -5,8 +5,8 @@
   "start_url": "https://ardu01.github.io/golf-performance-lab/",
   "scope": "https://ardu01.github.io/golf-performance-lab/",
   "display": "standalone",
-  "background_color": "#0b0e0c",
-  "theme_color": "#0b0e0c",
+  "background_color": "#F2F2F7",
+  "theme_color": "#F2F2F7",
   "icons": [
     {
       "src": "https://ardu01.github.io/golf-performance-lab/icons/icon-192.png",

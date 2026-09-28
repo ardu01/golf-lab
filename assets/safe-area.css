@@ -1,9 +1,7 @@
 /*
-  iOS standalone (apple-mobile-web-app-status-bar-style: black-translucent)
-  draws the page under the status bar and home indicator because the
-  viewport meta uses viewport-fit=cover. These rules add the inset
-  without changing the dark theme: the shell background still fills
-  the status-bar area, and content starts below it.
+  iOS standalone with viewport-fit=cover draws the page under the status
+  bar and home indicator. These rules add the inset: the light shell
+  still fills the status-bar area, and content starts below it.
 
   Unlayered so these win over the Tailwind utilities in styles-*.css.
   env() is 0 outside a notched / home-indicator device, so desktop

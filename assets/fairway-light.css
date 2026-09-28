@@ -1,0 +1,186 @@
+/*
+  Fairway 4.x light glass — tokens copied from ardu01/app-golf index.html :root.
+  Unlayered so these win over the Tailwind theme layer without touching features.
+*/
+
+:root {
+  --bg-fairway: #F2F2F7;
+  --bg-paper: #F2F2F7;
+  --bg-elevated: #FFFFFF;
+  --ink: #000000;
+  --ink-secondary: rgba(60, 60, 67, 0.6);
+  --brand-fairway: #000000;
+  --semantic-under: #34C759;
+  --semantic-over: #FF3B30;
+  --border-paper: rgba(60, 60, 67, 0.16);
+  --separator: rgba(0, 0, 0, 0.12);
+  --fill: rgba(120, 120, 128, 0.12);
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  --font-display-fairway: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  --tab-h: 49px;
+  --glass-bg: rgba(255, 255, 255, 0.72);
+  --glass-blur: 28px;
+  --glass-ink: #000000;
+  --glass-ink-secondary: rgba(60, 60, 67, 0.6);
+  --glass-separator: rgba(0, 0, 0, 0.12);
+  --glass-accent: #000000;
+  --glass-accent-pressed: #3A3A3C;
+  --glass-accent-dim: rgba(0, 0, 0, 0.08);
+  --glass-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  --glass-r-card: 16px;
+  --glass-r-sheet: 20px;
+
+  --font-sans: var(--font);
+  --font-mono: "SF Mono", ui-monospace, Menlo, monospace;
+  --font-display: var(--font-display-fairway);
+  --color-background: var(--bg-paper);
+  --color-foreground: var(--ink);
+  --color-card: var(--bg-elevated);
+  --color-card-foreground: var(--ink);
+  --color-primary: var(--glass-accent);
+  --color-primary-foreground: #FFFFFF;
+  --color-secondary: var(--fill);
+  --color-secondary-foreground: var(--ink);
+  --color-muted: var(--fill);
+  --color-muted-foreground: var(--ink-secondary);
+  --color-destructive: var(--semantic-over);
+  --color-border: var(--separator);
+  --color-ring: var(--glass-accent);
+  --color-ok: var(--semantic-under);
+  --color-warn: #FF9500;
+  --color-danger: var(--semantic-over);
+  --color-surface: var(--bg-elevated);
+  --color-ink: #000000;
+  --shadow-border: 0 1px 2px rgba(0, 0, 0, 0.04), 0 0 0 0.5px rgba(60, 60, 67, 0.16);
+  --shadow-border-hover: 0 1px 3px rgba(0, 0, 0, 0.06), 0 0 0 0.5px rgba(0, 0, 0, 0.28);
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 20px;
+  --radius: 12px;
+}
+
+html {
+  color-scheme: light;
+  background: var(--bg-paper);
+}
+
+body {
+  background: var(--bg-paper);
+  color: var(--ink);
+  font-family: var(--font);
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display-fairway);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+/* iOS grouped labels: sentence case, secondary ink. Badges stay spans. */
+p.uppercase {
+  text-transform: none;
+  letter-spacing: -0.01em;
+  font-weight: 400;
+  font-size: 13px;
+}
+
+/* Primary actions are solid black, no hairline. */
+button.bg-primary,
+a.bg-primary {
+  background: var(--glass-accent);
+  color: #FFFFFF;
+  box-shadow: none;
+}
+
+button.bg-primary:active,
+a.bg-primary:active {
+  background: var(--glass-accent-pressed);
+}
+
+/* Tab bar — 49px Apple material, glass blur. */
+nav.fixed.bottom-0 {
+  background: var(--glass-bg);
+  border-top: 0.5px solid var(--glass-separator);
+  -webkit-backdrop-filter: saturate(180%) blur(var(--glass-blur));
+  backdrop-filter: saturate(180%) blur(var(--glass-blur));
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.04);
+}
+
+nav.fixed.bottom-0 ul {
+  min-height: var(--tab-h);
+}
+
+nav.fixed.bottom-0 a {
+  min-height: var(--tab-h);
+  text-transform: none;
+  letter-spacing: 0.01em;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--glass-ink-secondary);
+}
+
+nav.fixed.bottom-0 a.text-primary,
+nav.fixed.bottom-0 a.active,
+nav.fixed.bottom-0 a[aria-current="page"] {
+  color: var(--glass-accent);
+}
+
+nav.fixed.bottom-0 a > span.rounded-full {
+  background: var(--glass-accent-dim);
+  color: var(--glass-ink);
+}
+
+/* Demo banner sits in the chrome, so it uses the same material. */
+.sticky.top-0 {
+  background: rgba(255, 149, 0, 0.14);
+  color: #9A4B00;
+  border-bottom-color: rgba(255, 149, 0, 0.28);
+  -webkit-backdrop-filter: saturate(160%) blur(18px);
+  backdrop-filter: saturate(160%) blur(18px);
+}
+
+/* Semantic score colors stay green / red. Hardcoded Tailwind fallbacks
+   still name the old dark palette, so pin the mixes here. */
+.bg-ok\/15 {
+  background-color: rgba(52, 199, 89, 0.15);
+}
+
+.bg-danger\/15 {
+  background-color: rgba(255, 59, 48, 0.15);
+}
+
+.bg-warn\/15 {
+  background-color: rgba(255, 149, 0, 0.16);
+}
+
+.bg-warn\/10 {
+  background-color: rgba(255, 149, 0, 0.12);
+}
+
+.bg-primary\/15 {
+  background-color: rgba(0, 0, 0, 0.06);
+}
+
+.bg-primary\/35 {
+  background-color: rgba(0, 0, 0, 0.22);
+}
+
+.ring-primary\/40 {
+  --tw-ring-color: rgba(0, 0, 0, 0.28);
+}
+
+.text-ok {
+  color: #34C759;
+}
+
+.text-danger,
+.text-red-500 {
+  color: #FF3B30;
+}
+
+.text-warn {
+  color: #9A4B00;
+}
