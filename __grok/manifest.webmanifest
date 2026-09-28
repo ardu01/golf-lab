@@ -1,36 +1,38 @@
 {
   "name": "Golf Performance Lab",
   "short_name": "Golf Lab",
-  "id": "https://ardu01.github.io/golf-performance-lab/",
-  "start_url": "https://ardu01.github.io/golf-performance-lab/",
-  "scope": "https://ardu01.github.io/golf-performance-lab/",
+  "description": "Laboratorio de rendimiento de golf",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
+  "orientation": "portrait-primary",
   "background_color": "#0b0e0c",
   "theme_color": "#0b0e0c",
+  "lang": "es-ES",
   "icons": [
     {
-      "src": "https://ardu01.github.io/golf-performance-lab/icons/icon-192.png",
+      "src": "icons/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "https://ardu01.github.io/golf-performance-lab/icons/icon-512.png",
+      "src": "icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "https://ardu01.github.io/golf-performance-lab/icons/apple-touch-icon.png",
-      "sizes": "180x180",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "https://ardu01.github.io/golf-performance-lab/icons/icon-512-maskable.png",
+      "src": "icons/icon-512-maskable.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    },
+    {
+      "src": "icons/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
     }
   ]
 }
