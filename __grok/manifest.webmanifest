@@ -1,15 +1,15 @@
 {
-  "name": "Grok App",
-  "short_name": "Grok App",
-  "id": "/",
-  "start_url": "/",
-  "scope": "/",
+  "name": "Golf Performance Lab",
+  "short_name": "Golf Lab",
+  "id": "/golf-performance-lab/",
+  "start_url": "/golf-performance-lab/",
+  "scope": "/golf-performance-lab/",
   "display": "standalone",
-  "background_color": "#000000",
-  "theme_color": "#000000",
+  "background_color": "#0b0e0c",
+  "theme_color": "#0b0e0c",
   "icons": [
     {
-      "src": "/__grok/icon-180.png",
+      "src": "/golf-performance-lab/__grok/icon-180.png",
       "sizes": "180x180",
       "type": "image/png"
     }
