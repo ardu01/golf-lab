@@ -59,6 +59,10 @@ function ironNumber(label) {
   return match ? Number(match[1]) : null;
 }
 
+export function isWedgeClub(club) {
+  return !!club && club.category !== "putter" && (club.category === "wedge" || (club.loft != null && Number(club.loft) >= 45));
+}
+
 export function familyFor(club, summerCarry) {
   let carry = Number(summerCarry) || 0;
   let cat = club?.category;
@@ -166,7 +170,7 @@ export function fullCarryOf(club, shots) {
 export function swingFractions(clubs, shots) {
   let buckets = { half: [], threeQuarter: [] };
   for (let club of clubs || []) {
-    if (!club || club.category === "putter") continue;
+    if (!isWedgeClub(club)) continue;
     let full = fullCarryOf(club, shots);
     if (full.source !== "logged" || full.n < 3 || !full.carry) continue;
     for (let swing of ["half", "threeQuarter"]) {
