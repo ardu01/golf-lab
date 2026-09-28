@@ -1,0 +1,55 @@
+/*
+  iOS standalone (apple-mobile-web-app-status-bar-style: black-translucent)
+  draws the page under the status bar and home indicator because the
+  viewport meta uses viewport-fit=cover. These rules add the inset
+  without changing the dark theme: the shell background still fills
+  the status-bar area, and content starts below it.
+
+  Unlayered so these win over the Tailwind utilities in styles-*.css.
+  env() is 0 outside a notched / home-indicator device, so desktop
+  and Android browsers keep the existing spacing.
+*/
+
+/* In-flow column: title, + button, and page content. */
+body > div.min-h-dvh {
+  padding-top: constant(safe-area-inset-top);
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-left: constant(safe-area-inset-left);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: constant(safe-area-inset-right);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+/*
+  Demo banner is sticky to the viewport. The shell already clears the
+  status bar at rest, so drop the extra pt-safe inset and stick the
+  banner just below the status bar while scrolling.
+  0.5rem matches the existing py-2.
+*/
+body > div.min-h-dvh > .sticky.top-0 {
+  top: constant(safe-area-inset-top);
+  top: env(safe-area-inset-top, 0px);
+  padding-top: 0.5rem;
+}
+
+/*
+  pb-28 was sized for pb-safe's 1rem floor. When the home indicator is
+  taller than 1rem, keep the same gap under the last card.
+*/
+body > div.min-h-dvh > main.pb-28 {
+  padding-bottom: calc(7rem + max(0px, env(safe-area-inset-bottom, 0px) - 1rem));
+}
+
+/*
+  The tab bar is position:fixed, so shell padding does not move it.
+  pb-safe already pads the home indicator; repeat it here and inset
+  the sides for landscape.
+*/
+nav.fixed.bottom-0 {
+  padding-bottom: max(1rem, constant(safe-area-inset-bottom));
+  padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+  padding-left: constant(safe-area-inset-left);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: constant(safe-area-inset-right);
+  padding-right: env(safe-area-inset-right, 0px);
+}
