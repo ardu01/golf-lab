@@ -3,27 +3,38 @@ const SEASON_KEY = "golf-lab-caddie-season";
 const DEFAULT_BASE = "https://api.openai.com/v1";
 const DEFAULT_MODEL = "gpt-4o-mini";
 
-export const seasonRule = "Sobre el número que pides, en Madrid: invierno +8% (frío y blando, menos vuelo y rodada), primavera +3%, otoño 0 (tus medias, tal cual), verano −5% (cálido y firme, más rodada). Es una regla de campo, no una medición.";
+export const seasonRule = "Tus güiros son el carry de verano. En invierno baja: wedge ≤100 m un 5–8%, hierros 6–8 un 8–12%, hierros largos e híbridos un 10–15%, maderas y driver un 8–12% de carry (el total cae más porque muere la rodada). Auto: noviembre–marzo en Madrid es invierno; el resto, verano. El viento se aplica después.";
 
 export const SEASONS = {
-  invierno: { label: "Invierno", factor: 0.08, note: "Aire frío y suelo blando: menos vuelo y menos rodada. El hoyo juega más largo, así que subo el número." },
-  primavera: { label: "Primavera", factor: 0.03, note: "Aún fresco. Un poco más de palo que en tus medias." },
-  verano: { label: "Verano", factor: -0.05, note: "Aire cálido y suelo firme: más rodada. El hoyo juega más corto, así que bajo el número." },
-  otoño: { label: "Otoño", factor: 0, note: "Referencia. El número es el que pides, con tus distancias tal cual." },
+  verano: { label: "Verano", note: "Base. El carry es el de tus güiros de verano y el green firme deja correr el golpe." },
+  invierno: { label: "Invierno", note: "El carry baja desde el verano y el suelo blando casi no rueda. Si no hay güiro de invierno, es una estimación." },
+};
+
+const WINTER_BANDS = {
+  wedge: { factor: 0.065, low: 5, high: 8, label: "wedge ≤100 m" },
+  nine: { factor: 0.08, low: 8, high: 8, label: "hierro 9" },
+  mid: { factor: 0.1, low: 8, high: 12, label: "hierros 6–8" },
+  long: { factor: 0.125, low: 10, high: 15, label: "hierros largos e híbridos" },
+  wood: { factor: 0.1, low: 8, high: 12, label: "maderas" },
+  driver: { factor: 0.1, low: 8, high: 12, label: "driver" },
 };
 
 export function seasonOfMadrid(date = new Date()) {
-  let month = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Madrid", month: "numeric" }).format(date));
-  if (month === 12 || month <= 2) return "invierno";
-  if (month <= 5) return "primavera";
-  if (month <= 8) return "verano";
-  return "otoño";
+  let month = madridMonth(date);
+  if (month === 11 || month === 12 || month <= 3) return "invierno";
+  return "verano";
+}
+
+function madridMonth(date) {
+  let value = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(value.getTime())) return 7;
+  return Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Madrid", month: "numeric" }).format(value));
 }
 
 export function readSeasonChoice() {
   try {
     let value = localStorage.getItem(SEASON_KEY);
-    if (value === "auto" || SEASONS[value]) return value;
+    if (value === "auto" || value === "verano" || value === "invierno") return value;
   } catch {}
   return "auto";
 }
@@ -43,10 +54,172 @@ export function resolveSeason(choice, date = new Date()) {
   return { id: seasonOfMadrid(date), source: "auto" };
 }
 
-export function seasonAdjust(distance, seasonId) {
-  let meta = SEASONS[seasonId] || SEASONS.otoño;
-  let meters = Math.round((Number(distance) || 0) * meta.factor);
-  return { id: seasonId in SEASONS ? seasonId : "otoño", label: meta.label, meters, note: meta.note, factor: meta.factor };
+function ironNumber(label) {
+  let match = String(label ?? "").match(/hierro\s*(\d+)/i);
+  return match ? Number(match[1]) : null;
+}
+
+export function familyFor(club, summerCarry) {
+  let carry = Number(summerCarry) || 0;
+  let cat = club?.category;
+  let n = ironNumber(club?.typeLabel);
+  if (cat === "driver") return "driver";
+  if (cat === "wood") return "wood";
+  if (cat === "wedge" || (carry > 0 && carry <= 100)) return "wedge";
+  if (cat === "hybrid" || (n != null && n <= 5)) return "long";
+  if (n === 9) return "nine";
+  return "mid";
+}
+
+export function fairwayMode(query) {
+  return query?.lie === "tee" || query?.target === "fairway" || query?.target === "layup" || !!query?.layup;
+}
+
+export function expectedRoll(family, season, mode, pin) {
+  if (mode !== "fairway") {
+    if (season === "invierno") return 0;
+    if (family === "wedge") return pin === "fondo" ? 6 : pin === "delante" ? 3 : 4;
+    if (pin === "fondo") return 12;
+    if (pin === "delante") return 5;
+    return 8;
+  }
+  let table = {
+    verano: { wedge: 4, nine: 10, mid: 18, long: 12, wood: 22, driver: 30 },
+    invierno: { wedge: 1, nine: 2, mid: 4, long: 3, wood: 8, driver: 10 },
+  };
+  return table[season]?.[family] ?? table[season]?.mid ?? 0;
+}
+
+export function seasonAim(query) {
+  if (!query || fairwayMode(query)) return { meters: 0, label: "" };
+  let pin = query.pin || "centro";
+  if (query.season === "invierno") {
+    if (pin === "delante") return { meters: 2, label: "Bandera delante, green blando: carry 1–3 m pasado" };
+    if (pin === "fondo") return { meters: 0, label: "" };
+    return { meters: 1, label: "Green blando: carry casi hasta la bandera" };
+  }
+  if (pin === "fondo") return { meters: -12, label: "Bandera al fondo, green firme: caer 12 m antes" };
+  if (pin === "delante") return { meters: -5, label: "Bandera delante, green firme: caer 5 m antes" };
+  return { meters: -8, label: "Green firme: caer unos 8 m antes y dejar correr" };
+}
+
+export function shotSeason(shot) {
+  if (shot?.season === "invierno" || shot?.season === "verano") return { id: shot.season, tagged: true };
+  return { id: seasonOfMadrid(shot?.recordedAt || Date.now()), tagged: false };
+}
+
+function meanOf(rows) {
+  if (!rows.length) return null;
+  return rows.reduce((sum, shot) => sum + shot.carry, 0) / rows.length;
+}
+
+function rowsFor(profile, shots) {
+  let all = (shots || []).filter((shot) => shot.clubId === profile.club?.id && typeof shot.carry === "number");
+  if (profile.swing) return all.filter((shot) => shot.swingType === profile.swing);
+  let full = all.filter((shot) => shot.swingType === "full" || !shot.swingType);
+  return full.length ? full : all;
+}
+
+function pct(factor) {
+  let n = Math.round(factor * 1000) / 10;
+  return String(n).replace(".", ",");
+}
+
+function bandText(band) {
+  return band.low === band.high ? `${band.low}%` : `${band.low}–${band.high}%`;
+}
+
+function missNote(rows) {
+  if (!rows || rows.length < 4) return "";
+  let avg = meanOf(rows);
+  let short = rows.filter((shot) => shot.carry < avg - 2).length;
+  let long = rows.filter((shot) => shot.carry > avg + 2).length;
+  if (short === long) return "Tus güiros se reparten corto y largo de la media.";
+  if (short > long) return `De estos güiros, ${short} se quedan cortos de tu media y ${long} se pasan.`;
+  return `De estos güiros, ${long} se pasan de tu media y ${short} se quedan cortos.`;
+}
+
+export function applySeason(profile, shots, query) {
+  if (!profile || profile.carry == null || !profile.club) return profile;
+  let season = query?.season === "invierno" ? "invierno" : "verano";
+  let pin = query?.pin || "centro";
+  let mode = fairwayMode(query) ? "fairway" : "green";
+  let rows = rowsFor(profile, shots);
+  let verano = rows.filter((shot) => shotSeason(shot).id === "verano");
+  let invierno = rows.filter((shot) => shotSeason(shot).id === "invierno");
+  let summerCarry = meanOf(verano);
+  let winterCarry = meanOf(invierno);
+  let stock = profile.used === "declared" || rows.length === 0;
+  let familyCarry = summerCarry ?? winterCarry ?? profile.carry;
+  let family = familyFor(profile.club, familyCarry);
+  let band = WINTER_BANDS[family];
+  let flight = profile.carry;
+  let estimated = false;
+  let source = "stock";
+  let used = rows;
+  if (season === "verano") {
+    if (summerCarry != null) {
+      flight = summerCarry;
+      used = verano;
+      source = verano.some((shot) => shotSeason(shot).tagged) ? "tag" : "fecha";
+    } else if (winterCarry != null) {
+      flight = winterCarry / (1 - band.factor);
+      used = invierno;
+      estimated = true;
+      source = "estima-verano";
+    } else {
+      flight = profile.carry;
+      estimated = stock;
+      source = "stock";
+      used = [];
+    }
+  } else if (winterCarry != null) {
+    flight = winterCarry;
+    used = invierno;
+    source = invierno.some((shot) => shotSeason(shot).tagged) ? "tag" : "fecha";
+  } else if (summerCarry != null) {
+    flight = summerCarry * (1 - band.factor);
+    used = verano;
+    estimated = true;
+    source = "estima-invierno";
+  } else {
+    flight = profile.carry * (1 - band.factor);
+    estimated = true;
+    source = "estima-stock";
+    used = [];
+  }
+  let roll = mode === "fairway" ? expectedRoll(family, season, mode, pin) : 0;
+  let playing = flight + roll;
+  let tagged = source === "tag";
+  let count = used.length;
+  let noun = count === 1 ? "güiro" : "güiros";
+  let seasonNote;
+  if (source === "estima-stock") seasonNote = `No hay güiros de este palo. Stock de verano ${Math.round(profile.carry)} m. Estima invierno: ${Math.round(flight)} m (${pct(band.factor)}%, tramo ${bandText(band)} de ${band.label}).`;
+  else if (source === "stock") seasonNote = `No hay güiros de este palo. Uso el stock de verano (${Math.round(flight)} m).`;
+  else if (source === "estima-invierno") seasonNote = `Tus ${count} ${noun} son de verano (media ${Math.round(summerCarry)} m${tagged ? ", etiquetados" : ", por la fecha"}). Estima invierno: ${Math.round(flight)} m, ${pct(band.factor)}% menos (tramo ${bandText(band)}, ${band.label}).`;
+  else if (source === "estima-verano") seasonNote = `Solo tengo ${count} ${noun} de invierno (media ${Math.round(winterCarry)} m). Estimo el verano en ${Math.round(flight)} m, invirtiendo el tramo ${bandText(band)}.`;
+  else if (season === "invierno") seasonNote = `Uso ${count} ${noun} de invierno${tagged ? " etiquetados" : " (por la fecha, sin etiqueta)"}, media ${Math.round(flight)} m. No aplico la estimación.`;
+  else seasonNote = `Base de verano: ${count} ${noun}${tagged ? " etiquetados" : " (por la fecha)"}, media ${Math.round(flight)} m.`;
+  let greenRoll = season === "verano" ? (pin === "fondo" ? "12" : pin === "delante" ? "5" : "8") : "0";
+  let rollNote = mode === "fairway"
+    ? `En el total, la rodada de ${season === "verano" ? "suelo firme" : "suelo blando"} suma ${roll} m. En verano un hierro medio corre 10–25 m y el driver 20–40 m; en invierno el hierro se queda en 0–8 m y el driver en 5–15 m.`
+    : season === "verano"
+      ? `Green firme: el número ya deja la caída ${greenRoll} m antes (tramo 5–12) para que corra.`
+      : "Green blando: sin rodada. El número pide el carry hasta la bandera, o 1–3 m pasado si está delante.";
+  return {
+    ...profile,
+    carry: flight,
+    summerCarry: summerCarry ?? (stock ? profile.carry : null),
+    roll,
+    playing,
+    family,
+    factor: estimated && season === "invierno" ? band.factor : 0,
+    estimated,
+    seasonShotSource: source,
+    seasonNote: `${seasonNote} ${rollNote}`,
+    missNote: missNote(used),
+    stats: { ...profile.stats, n: count || profile.stats?.n || 0, mean: flight },
+  };
 }
 
 function emptyConfig() {
@@ -88,13 +261,16 @@ function who(name) {
   return n || "";
 }
 
-function strategyCopy(strategy, club, name) {
+function strategyCopy(strategy, club, name, query) {
   let n = who(name);
   let you = n ? `${n}, ` : "";
-  if (!club) return `${you}no tienes un palo con distancia para este número. Declara un carry o registra golpes.`;
-  if (strategy === "safe") return `${you}${club} es la opción holgada con las distancias que tienes guardadas. Si dudas entre dos palos, coge el de más y acepta quedarte corto.`;
+  let winter = query?.season === "invierno";
+  if (!club) return `${you}no tienes un palo con distancia para este número. Declara un carry o registra güiros.`;
+  if (winter && (strategy === "safe" || query?.pin === "delante" || query?.bunker || query?.shortHazard != null)) return `${you}en invierno, entre dos palos, coge el más largo si el problema es quedarte corto. ${club} es esa opción. El suelo blando no te perdona.`;
+  if (!winter && strategy === "aggressive") return `${you}en verano la rodada a veces alcanza: ${club} puede bastar aunque el carry se quede un poco antes. Si no te sale, vuelve a conservador.`;
+  if (strategy === "safe") return `${you}${club} es la opción holgada con tus güiros de verano. Si dudas entre dos palos, coge el de más.`;
   if (strategy === "aggressive") return `${you}${club} juega tu número. El margen es justo: si el golpe no te sale, baja a conservador.`;
-  return `${you}${club} cubre el objetivo con tus propias distancias. Ni persigas la bandera ni dejes el palo corto a propósito.`;
+  return `${you}${club} sale de tus propios güiros. Ni persigas la bandera ni dejes el palo corto a propósito.`;
 }
 
 const SWING = { full: "completo", threeQuarter: "¾", half: "½" };
@@ -120,21 +296,24 @@ function personalLine(name, option, shots) {
   if (!option) return `${hello}no hay un palo con datos para este golpe.`;
   let mine = (shots || []).filter((s) => s.clubId === option.clubId);
   let swings = swingStats(mine);
-  let swingBits = swings.map((s) => `${s.n} ${s.n === 1 ? "golpe" : "golpes"} de ${SWING[s.id]} (media ${s.mean} m)`);
+  let swingBits = swings.map((s) => `${s.n} ${s.n === 1 ? "güiro" : "güiros"} de ${SWING[s.id]} (media ${s.mean} m)`);
   let body;
-  if (option.used === "declared" || swings.length === 0) {
-    body = `${hello}en ${option.title} no tengo golpes tuyos. Uso el carry habitual que declaraste${option.carry != null ? ` (${Math.round(option.carry)} m)` : ""}, no una media medida.`;
+  if (option.used === "declared" || (swings.length === 0 && option.seasonShotSource === "estima-stock") || (swings.length === 0 && option.used !== "shots")) {
+    body = `${hello}en ${option.title} no tengo güiros. El stock es de verano${option.summerCarry != null ? ` (${Math.round(option.summerCarry)} m)` : option.carry != null ? ` (${Math.round(option.carry)} m)` : ""}.`;
+  } else if (swings.length === 0) {
+    body = `${hello}este ${option.title} no tiene güiros guardados.`;
   } else {
     let spread = option.dispersion == null ? "" : option.quality === "sufficient" && option.dispersion <= 8 ? ` Te sale bastante junto (±${Math.round(option.dispersion)} m).` : option.dispersion >= 12 ? ` La distancia se te mueve (±${Math.round(option.dispersion)} m).` : ` Dispersión ±${Math.round(option.dispersion)} m.`;
-    let sample = option.n != null && option.n < 5 ? " Es tu número, pero aún son pocos golpes." : "";
-    body = `${hello}este ${option.title} sale de tus golpes: ${swingBits.join(", ")}.${spread}${sample}`;
+    body = `${hello}este ${option.title} sale de tus güiros: ${swingBits.join(", ")}.${spread}`;
   }
+  if (option.missNote) body += ` ${option.missNote}`;
+  if (option.clubCategory === "driver" && option.dispersion != null) body += ` No hay calles (FIR) guardadas; la tendencia del driver es su dispersión, ±${Math.round(option.dispersion)} m.`;
   let latest = mine.map((s) => s.recordedAt).filter(Boolean).sort().at(-1);
   if (latest) {
     let day = latest.slice(0, 10);
     let count = mine.filter((s) => String(s.recordedAt).slice(0, 10) === day).length;
     let nice = formatDay(latest);
-    if (nice) body += ` Última tanda con este palo: ${nice} (${count} ${count === 1 ? "golpe" : "golpes"}).`;
+    if (nice) body += ` Última tanda con este palo: ${nice} (${count} ${count === 1 ? "güiro" : "güiros"}).`;
   }
   return body;
 }
@@ -159,6 +338,14 @@ export function adviceFor(query, result, personal = {}) {
     side = "largo";
     sideLabel = "Fallo largo";
     sideDetail = query.bunker ? "El bunker está corto. Mejor volarlo que quedarse dentro." : `El obstáculo corto está a ${query.shortHazard} m. No te quedes delante.`;
+  } else if (query.season === "invierno" && query.pin === "delante") {
+    side = "largo";
+    sideLabel = "Llevar el carry";
+    sideDetail = "Invierno, green blando y bandera delante: el vuelo tiene que llegar (o pasarse 1–3 m). No busques un bote corto.";
+  } else if (query.season === "verano" && query.pin === "fondo") {
+    side = "corto";
+    sideLabel = "Caída corta";
+    sideDetail = "Verano, green firme y bandera al fondo: aterriza 5–12 m antes y deja que corra.";
   } else if (query.strategy === "safe") {
     side = "corto";
     sideLabel = "Fallo corto";
@@ -172,24 +359,32 @@ export function adviceFor(query, result, personal = {}) {
   if (top && top.delta < -8 && query.strategy !== "aggressive") sideDetail += " Este palo se queda corto del número: para llegar hace falta más palo.";
   if (top && top.delta > 8 && (query.strategy === "safe" || longTrouble)) sideDetail += " Este palo pasa el número: apunta a la parte de delante.";
   let labels = { safe: "Conservador", normal: "Normal", aggressive: "Agresivo" };
-  let season = seasonAdjust(query.distance, query.season || "otoño");
+  let seasonId = query.season === "invierno" ? "invierno" : "verano";
+  let season = SEASONS[seasonId];
   let name = personal.playerName ?? query.playerName ?? "";
-  let signed = season.meters > 0 ? `+${season.meters}` : String(season.meters);
-  let seasonDetail = `${season.note} Regla: ${Math.round(season.factor * 100)}% (${signed} m sobre ${Math.round(Number(query.distance) || 0)} m).`;
+  let flight = top?.carry != null ? Math.round(top.carry) : null;
+  let playing = top?.playing != null ? Math.round(top.playing) : flight;
+  let seasonDetail = top?.seasonNote || season.note;
+  if (seasonId === "invierno" && Number(query.distance) >= 140 && top?.family !== "wedge") seasonDetail += " De ~140 m para arriba, la guía rápida es un palo más; si el green tampoco corre, a veces son dos.";
+  if (seasonId === "invierno" && top?.family === "wedge") seasonDetail += " En el wedge el palo a menudo es el mismo, pero el golpe sale más corto.";
+  if (query.lie === "tee" && top?.clubCategory !== "driver") seasonDetail += " No hay dato de calles (FIR); no invento esa tendencia.";
+  seasonDetail += " El viento, el lie y el desnivel van después de este ajuste.";
   return {
     club,
-    carry: top ? Math.round(top.carry) : null,
+    carry: flight,
+    playing,
     side,
     sideLabel,
     sideDetail,
     strategy: query.strategy ?? "normal",
     strategyLabel: labels[query.strategy] ?? "Normal",
-    strategyDetail: strategyCopy(query.strategy, club, name),
+    strategyDetail: strategyCopy(query.strategy, club, name, query),
     personalLine: personalLine(name, top, personal.shots || []),
-    season: season.id,
+    season: seasonId,
     seasonLabel: season.label,
     seasonSource: query.seasonSource === "manual" ? "manual" : "auto",
-    seasonMeters: season.meters,
+    seasonMeters: top?.summerCarry != null && flight != null ? Math.round(flight - top.summerCarry) : 0,
+    estimated: !!top?.estimated,
     seasonDetail,
     source: "reglas",
   };
