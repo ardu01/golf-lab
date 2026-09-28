@@ -1,0 +1,1 @@
+import{H as e,bt as t,w as n}from"./app-shell-DBzHX12f.js";t();var r=e();function i({className:e,...t}){return(0,r.jsx)(`label`,{className:n(`text-xs font-medium uppercase tracking-wider text-muted-foreground`,e),...t})}export{i as t};
