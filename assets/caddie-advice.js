@@ -435,8 +435,8 @@ function strategyCopy(strategy, club, name, query, estimatedSwing) {
 
 const SWING = { full: "completo", threeQuarter: "¾", half: "½" };
 
-function swingStats(shots) {
-  return ["full", "threeQuarter", "half"].map((id) => {
+function swingStats(shots, wedge) {
+  return (wedge ? ["full", "threeQuarter", "half"] : ["full"]).map((id) => {
     let rows = shots.filter((s) => s.swingType === id && typeof s.carry === "number");
     if (!rows.length) return null;
     let mean = rows.reduce((sum, s) => sum + s.carry, 0) / rows.length;
@@ -462,7 +462,7 @@ function personalLine(name, option, shots) {
     return `${hello}no has anotado un golpe de ${swing} con este palo. Estimo ${meters} m de verano${percent != null ? `, el ${percent}% del completo` : ""}${full != null ? ` (${full} m)` : ""}. Un güiro real sustituye esta cifra.`;
   }
   let mine = (shots || []).filter((s) => s.clubId === option.clubId);
-  let swings = swingStats(mine);
+  let swings = swingStats(mine, isWedgeClub({ category: option.clubCategory, loft: option.loft }));
   let swingBits = swings.map((s) => `${s.n} ${s.n === 1 ? "güiro" : "güiros"} de ${SWING[s.id]} (media ${s.mean} m)`);
   let body;
   if (option.used === "declared" || (swings.length === 0 && option.seasonShotSource === "estima-stock") || (swings.length === 0 && option.used !== "shots")) {
