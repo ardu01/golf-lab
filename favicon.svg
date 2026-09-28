@@ -1,8 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
   <rect width="32" height="32" rx="8" fill="#0b0e0c"/>
-  <ellipse cx="16" cy="26" rx="11" ry="3.4" fill="#141916"/>
-  <ellipse cx="16" cy="25.2" rx="9" ry="2.6" fill="#c4d4c0"/>
-  <ellipse cx="16" cy="25.2" rx="1.8" ry="0.7" fill="#0b0e0c"/>
-  <rect x="15" y="5" width="2" height="20.4" rx="0.6" fill="#e8ebe6"/>
-  <polygon points="17,5.2 28,10.6 17,16" fill="#c4d4c0"/>
+  <path fill="#7ddea4" d="M9.2 20.5c0.4-3.2 2.2-6.8 5.4-8.6 1.2-0.7 2.5-0.9 3.5-0.4l1.8 5.2c-2.6 1.1-4.7 3.2-5.8 5.8-0.4 0.9-1.5 1.2-2.3 0.7l-2.1-1.4c-0.4-0.3-0.6-0.8-0.5-1.3z"/>
+  <path fill="#5fb887" d="M18.2 10.8c0.9 0.3 1.5 1.1 1.8 2.1 0.6 2.1 0.2 4.2-0.6 5.8l-1.7-4.9c0.1-1.1 0.2-2.1 0.5-3z"/>
+  <rect x="19.6" y="7.2" width="2.2" height="5.2" rx="1.1" transform="rotate(28 20.7 9.8)" fill="#9fd9b5"/>
 </svg>
