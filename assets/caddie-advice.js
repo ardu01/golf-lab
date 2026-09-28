@@ -139,12 +139,167 @@ function missNote(rows) {
   return `De estos güiros, ${long} se pasan de tu media y ${short} se quedan cortos.`;
 }
 
+// Fractions come from the player's own wedges when a club has both a full
+// swing and a partial with at least 3 güiros. The demo wedge book lands near
+// 62% (½) and 84% (¾), above a generic 50–55 / 75–80 guess, so that book is
+// the fallback until real partials exist.
+export const SWING_FALLBACK = { half: 0.62, threeQuarter: 0.84 };
+const SWING_IDS = ["half", "threeQuarter", "full"];
+const GAP_METERS = 8;
+
+function clubRows(club, shots, swing) {
+  return (shots || []).filter((shot) => {
+    if (!club || shot.clubId !== club.id || typeof shot.carry !== "number") return false;
+    if (swing === "full") return shot.swingType === "full" || !shot.swingType;
+    return shot.swingType === swing;
+  });
+}
+
+export function fullCarryOf(club, shots) {
+  let rows = clubRows(club, shots, "full");
+  let mean = meanOf(rows);
+  if (mean != null) return { carry: mean, n: rows.length, source: "logged" };
+  if (club?.carryHabitual != null && club.carryHabitual > 0) return { carry: club.carryHabitual, n: 0, source: "stock" };
+  return { carry: null, n: 0, source: "none" };
+}
+
+export function swingFractions(clubs, shots) {
+  let buckets = { half: [], threeQuarter: [] };
+  for (let club of clubs || []) {
+    if (!club || club.category === "putter") continue;
+    let full = fullCarryOf(club, shots);
+    if (full.source !== "logged" || full.n < 3 || !full.carry) continue;
+    for (let swing of ["half", "threeQuarter"]) {
+      let rows = clubRows(club, shots, swing);
+      if (rows.length < 3) continue;
+      let mean = meanOf(rows);
+      if (mean == null || mean <= 0) continue;
+      buckets[swing].push(mean / full.carry);
+    }
+  }
+  let ratio = (id) => (buckets[id].length ? buckets[id].reduce((sum, value) => sum + value, 0) / buckets[id].length : SWING_FALLBACK[id]);
+  return {
+    half: ratio("half"),
+    threeQuarter: ratio("threeQuarter"),
+    learnedHalf: buckets.half.length > 0,
+    learnedThreeQuarter: buckets.threeQuarter.length > 0,
+  };
+}
+
+function neighborLabel(clubs, shots, carry, selfId) {
+  if (carry == null) return "";
+  let best = null;
+  for (let club of clubs || []) {
+    if (!club || club.id === selfId || club.category === "putter") continue;
+    let full = fullCarryOf(club, shots);
+    if (full.carry == null) continue;
+    let gap = Math.abs(full.carry - carry);
+    if (gap <= GAP_METERS && (best == null || gap < best.gap)) best = { gap, label: club.typeLabel, carry: full.carry };
+  }
+  if (!best) return "";
+  return `encaja con ${best.label} (${Math.round(best.carry)} m)`;
+}
+
+export function swingBook(club, shots, clubs) {
+  let fractions = swingFractions(clubs, shots);
+  let full = fullCarryOf(club, shots);
+  let book = {};
+  for (let swing of SWING_IDS) {
+    if (swing === "full") {
+      book.full = {
+        swing,
+        carry: full.carry,
+        n: full.n,
+        source: full.source === "logged" ? "logged" : full.source,
+        ratio: full.carry ? 1 : null,
+        percent: full.carry ? 100 : null,
+        fullCarry: full.carry,
+        nearLabel: "",
+        learned: false,
+      };
+      continue;
+    }
+    let rows = clubRows(club, shots, swing);
+    let logged = meanOf(rows);
+    let ratio = fractions[swing];
+    let learned = swing === "half" ? fractions.learnedHalf : fractions.learnedThreeQuarter;
+    if (logged != null) {
+      book[swing] = {
+        swing,
+        carry: logged,
+        n: rows.length,
+        source: "logged",
+        ratio: full.carry ? logged / full.carry : null,
+        percent: full.carry ? Math.round((logged / full.carry) * 100) : null,
+        fullCarry: full.carry,
+        nearLabel: "",
+        learned,
+      };
+      continue;
+    }
+    if (full.carry == null) {
+      book[swing] = { swing, carry: null, n: 0, source: "none", ratio, percent: Math.round(ratio * 100), fullCarry: null, nearLabel: "", learned };
+      continue;
+    }
+    let carry = full.carry * ratio;
+    book[swing] = {
+      swing,
+      carry,
+      n: 0,
+      source: "estimado",
+      ratio,
+      percent: Math.round(ratio * 100),
+      fullCarry: full.carry,
+      nearLabel: neighborLabel(clubs, shots, carry, club?.id),
+      learned,
+    };
+  }
+  return book;
+}
+
+function rollSentence(season, mode, pin, roll) {
+  let greenRoll = season === "verano" ? (pin === "fondo" ? "12" : pin === "delante" ? "5" : "8") : "0";
+  if (mode === "fairway") return `En el total, la rodada de ${season === "verano" ? "suelo firme" : "suelo blando"} suma ${roll} m. En verano un hierro medio corre 10–25 m y el driver 20–40 m; en invierno el hierro se queda en 0–8 m y el driver en 5–15 m.`;
+  if (season === "verano") return `Green firme: el número ya deja la caída ${greenRoll} m antes (tramo 5–12) para que corra.`;
+  return "Green blando: sin rodada. El número pide el carry hasta la bandera, o 1–3 m pasado si está delante.";
+}
+
+function applySwingEstimate(profile, season, pin, mode) {
+  let summerFlight = profile.carry;
+  let family = familyFor(profile.club, profile.fullCarry || summerFlight);
+  let band = WINTER_BANDS[family];
+  let flight = season === "invierno" ? summerFlight * (1 - band.factor) : summerFlight;
+  let roll = mode === "fairway" ? expectedRoll(family, season, mode, pin) : 0;
+  let percent = Math.round((profile.swingRatio || 0) * 100);
+  let fullM = profile.fullCarry != null ? Math.round(profile.fullCarry) : null;
+  let base = `No hay güiro de este swing. Estimo ${Math.round(summerFlight)} m, el ${percent}% del completo${fullM != null ? ` (${fullM} m)` : ""}.`;
+  let seasonNote = season === "invierno"
+    ? `${base} Estima invierno: ${Math.round(flight)} m, ${pct(band.factor)}% menos (tramo ${bandText(band)}, ${band.label}).`
+    : base;
+  return {
+    ...profile,
+    carry: flight,
+    summerCarry: summerFlight,
+    roll,
+    playing: flight + roll,
+    family,
+    factor: season === "invierno" ? band.factor : 0,
+    estimated: season === "invierno",
+    swingEstimate: true,
+    seasonShotSource: season === "invierno" ? "estima-swing-invierno" : "estima-swing",
+    seasonNote: `${seasonNote} ${rollSentence(season, mode, pin, roll)}`,
+    missNote: "",
+    stats: { ...profile.stats, n: 0, mean: flight },
+  };
+}
+
 export function applySeason(profile, shots, query) {
   if (!profile || profile.carry == null || !profile.club) return profile;
   let season = query?.season === "invierno" ? "invierno" : "verano";
   let pin = query?.pin || "centro";
   let mode = fairwayMode(query) ? "fairway" : "green";
   let rows = rowsFor(profile, shots);
+  if (profile.swingEstimate && rows.length === 0) return applySwingEstimate(profile, season, pin, mode);
   let verano = rows.filter((shot) => shotSeason(shot).id === "verano");
   let invierno = rows.filter((shot) => shotSeason(shot).id === "invierno");
   let summerCarry = meanOf(verano);
@@ -261,11 +416,12 @@ function who(name) {
   return n || "";
 }
 
-function strategyCopy(strategy, club, name, query) {
+function strategyCopy(strategy, club, name, query, estimatedSwing) {
   let n = who(name);
   let you = n ? `${n}, ` : "";
   let winter = query?.season === "invierno";
   if (!club) return `${you}no tienes un palo con distancia para este número. Declara un carry o registra güiros.`;
+  if (estimatedSwing && strategy !== "safe" && strategy !== "aggressive") return `${you}${club} es una estimación a partir del completo, no un güiro de ese swing. Si lo anotas, sustituye la cifra.`;
   if (winter && (strategy === "safe" || query?.pin === "delante" || query?.bunker || query?.shortHazard != null)) return `${you}en invierno, entre dos palos, coge el más largo si el problema es quedarte corto. ${club} es esa opción. El suelo blando no te perdona.`;
   if (!winter && strategy === "aggressive") return `${you}en verano la rodada a veces alcanza: ${club} puede bastar aunque el carry se quede un poco antes. Si no te sale, vuelve a conservador.`;
   if (strategy === "safe") return `${you}${club} es la opción holgada con tus güiros de verano. Si dudas entre dos palos, coge el de más.`;
@@ -294,6 +450,13 @@ function personalLine(name, option, shots) {
   let n = who(name);
   let hello = n ? `${n}, ` : "";
   if (!option) return `${hello}no hay un palo con datos para este golpe.`;
+  if (option.swingEstimate) {
+    let swing = SWING[option.swing] || "swing";
+    let percent = option.swingRatio != null ? Math.round(option.swingRatio * 100) : null;
+    let full = option.fullCarry != null ? Math.round(option.fullCarry) : null;
+    let meters = Math.round(option.summerCarry ?? option.carry);
+    return `${hello}no has anotado un golpe de ${swing} con este palo. Estimo ${meters} m de verano${percent != null ? `, el ${percent}% del completo` : ""}${full != null ? ` (${full} m)` : ""}. Un güiro real sustituye esta cifra.`;
+  }
   let mine = (shots || []).filter((s) => s.clubId === option.clubId);
   let swings = swingStats(mine);
   let swingBits = swings.map((s) => `${s.n} ${s.n === 1 ? "güiro" : "güiros"} de ${SWING[s.id]} (media ${s.mean} m)`);
@@ -378,13 +541,14 @@ export function adviceFor(query, result, personal = {}) {
     sideDetail,
     strategy: query.strategy ?? "normal",
     strategyLabel: labels[query.strategy] ?? "Normal",
-    strategyDetail: strategyCopy(query.strategy, club, name, query),
+    strategyDetail: strategyCopy(query.strategy, club, name, query, !!top?.swingEstimate),
     personalLine: personalLine(name, top, personal.shots || []),
     season: seasonId,
     seasonLabel: season.label,
     seasonSource: query.seasonSource === "manual" ? "manual" : "auto",
     seasonMeters: top?.summerCarry != null && flight != null ? Math.round(flight - top.summerCarry) : 0,
     estimated: !!top?.estimated,
+    swingEstimate: !!top?.swingEstimate,
     seasonDetail,
     source: "reglas",
   };
