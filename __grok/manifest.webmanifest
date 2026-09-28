@@ -21,16 +21,16 @@
       "purpose": "any"
     },
     {
-      "src": "/golf-performance-lab/__grok/icon-512-maskable.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "maskable"
-    },
-    {
       "src": "/golf-performance-lab/__grok/icon-180.png",
       "sizes": "180x180",
       "type": "image/png",
       "purpose": "any"
+    },
+    {
+      "src": "/golf-performance-lab/__grok/icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }
