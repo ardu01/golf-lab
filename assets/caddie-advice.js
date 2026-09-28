@@ -1,6 +1,53 @@
 const STORAGE_KEY = "golf-lab-caddie-ai";
+const SEASON_KEY = "golf-lab-caddie-season";
 const DEFAULT_BASE = "https://api.openai.com/v1";
 const DEFAULT_MODEL = "gpt-4o-mini";
+
+export const seasonRule = "Sobre el número que pides, en Madrid: invierno +8% (frío y blando, menos vuelo y rodada), primavera +3%, otoño 0 (tus medias, tal cual), verano −5% (cálido y firme, más rodada). Es una regla de campo, no una medición.";
+
+export const SEASONS = {
+  invierno: { label: "Invierno", factor: 0.08, note: "Aire frío y suelo blando: menos vuelo y menos rodada. El hoyo juega más largo, así que subo el número." },
+  primavera: { label: "Primavera", factor: 0.03, note: "Aún fresco. Un poco más de palo que en tus medias." },
+  verano: { label: "Verano", factor: -0.05, note: "Aire cálido y suelo firme: más rodada. El hoyo juega más corto, así que bajo el número." },
+  otoño: { label: "Otoño", factor: 0, note: "Referencia. El número es el que pides, con tus distancias tal cual." },
+};
+
+export function seasonOfMadrid(date = new Date()) {
+  let month = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Madrid", month: "numeric" }).format(date));
+  if (month === 12 || month <= 2) return "invierno";
+  if (month <= 5) return "primavera";
+  if (month <= 8) return "verano";
+  return "otoño";
+}
+
+export function readSeasonChoice() {
+  try {
+    let value = localStorage.getItem(SEASON_KEY);
+    if (value === "auto" || SEASONS[value]) return value;
+  } catch {}
+  return "auto";
+}
+
+export function writeSeasonChoice(value) {
+  let next = value === "auto" || SEASONS[value] ? value : "auto";
+  localStorage.setItem(SEASON_KEY, next);
+  return next;
+}
+
+export function clearSeasonChoice() {
+  localStorage.removeItem(SEASON_KEY);
+}
+
+export function resolveSeason(choice, date = new Date()) {
+  if (choice && choice !== "auto" && SEASONS[choice]) return { id: choice, source: "manual" };
+  return { id: seasonOfMadrid(date), source: "auto" };
+}
+
+export function seasonAdjust(distance, seasonId) {
+  let meta = SEASONS[seasonId] || SEASONS.otoño;
+  let meters = Math.round((Number(distance) || 0) * meta.factor);
+  return { id: seasonId in SEASONS ? seasonId : "otoño", label: meta.label, meters, note: meta.note, factor: meta.factor };
+}
 
 function emptyConfig() {
   return { apiKey: "", baseUrl: "", model: "" };
@@ -36,14 +83,63 @@ export function clearAiConfig() {
   localStorage.removeItem(STORAGE_KEY);
 }
 
-function strategyCopy(strategy, club) {
-  if (!club) return "No hay un palo con distancia para este número. Declara un carry o registra golpes.";
-  if (strategy === "safe") return `${club} es la opción holgada. Si dudas entre dos palos, coge el de más y acepta quedarte corto.`;
-  if (strategy === "aggressive") return `${club} juega el número. El margen es justo: si el golpe no te sale, baja a conservador.`;
-  return `${club} cubre el objetivo ajustado con tus distancias. Ni persigas la bandera ni dejes el palo corto a propósito.`;
+function who(name) {
+  let n = String(name ?? "").trim();
+  return n || "";
 }
 
-export function adviceFor(query, result) {
+function strategyCopy(strategy, club, name) {
+  let n = who(name);
+  let you = n ? `${n}, ` : "";
+  if (!club) return `${you}no tienes un palo con distancia para este número. Declara un carry o registra golpes.`;
+  if (strategy === "safe") return `${you}${club} es la opción holgada con las distancias que tienes guardadas. Si dudas entre dos palos, coge el de más y acepta quedarte corto.`;
+  if (strategy === "aggressive") return `${you}${club} juega tu número. El margen es justo: si el golpe no te sale, baja a conservador.`;
+  return `${you}${club} cubre el objetivo con tus propias distancias. Ni persigas la bandera ni dejes el palo corto a propósito.`;
+}
+
+const SWING = { full: "completo", threeQuarter: "¾", half: "½" };
+
+function swingStats(shots) {
+  return ["full", "threeQuarter", "half"].map((id) => {
+    let rows = shots.filter((s) => s.swingType === id && typeof s.carry === "number");
+    if (!rows.length) return null;
+    let mean = rows.reduce((sum, s) => sum + s.carry, 0) / rows.length;
+    return { id, n: rows.length, mean: Math.round(mean) };
+  }).filter(Boolean);
+}
+
+function formatDay(iso) {
+  let date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("es-ES", { day: "numeric", month: "short", timeZone: "Europe/Madrid" }).format(date);
+}
+
+function personalLine(name, option, shots) {
+  let n = who(name);
+  let hello = n ? `${n}, ` : "";
+  if (!option) return `${hello}no hay un palo con datos para este golpe.`;
+  let mine = (shots || []).filter((s) => s.clubId === option.clubId);
+  let swings = swingStats(mine);
+  let swingBits = swings.map((s) => `${s.n} ${s.n === 1 ? "golpe" : "golpes"} de ${SWING[s.id]} (media ${s.mean} m)`);
+  let body;
+  if (option.used === "declared" || swings.length === 0) {
+    body = `${hello}en ${option.title} no tengo golpes tuyos. Uso el carry habitual que declaraste${option.carry != null ? ` (${Math.round(option.carry)} m)` : ""}, no una media medida.`;
+  } else {
+    let spread = option.dispersion == null ? "" : option.quality === "sufficient" && option.dispersion <= 8 ? ` Te sale bastante junto (±${Math.round(option.dispersion)} m).` : option.dispersion >= 12 ? ` La distancia se te mueve (±${Math.round(option.dispersion)} m).` : ` Dispersión ±${Math.round(option.dispersion)} m.`;
+    let sample = option.n != null && option.n < 5 ? " Es tu número, pero aún son pocos golpes." : "";
+    body = `${hello}este ${option.title} sale de tus golpes: ${swingBits.join(", ")}.${spread}${sample}`;
+  }
+  let latest = mine.map((s) => s.recordedAt).filter(Boolean).sort().at(-1);
+  if (latest) {
+    let day = latest.slice(0, 10);
+    let count = mine.filter((s) => String(s.recordedAt).slice(0, 10) === day).length;
+    let nice = formatDay(latest);
+    if (nice) body += ` Última tanda con este palo: ${nice} (${count} ${count === 1 ? "golpe" : "golpes"}).`;
+  }
+  return body;
+}
+
+export function adviceFor(query, result, personal = {}) {
   let top = result.options?.[0] ?? null;
   let club = top?.title ?? null;
   let longTrouble = !!query.water || query.longHazard != null;
@@ -76,6 +172,10 @@ export function adviceFor(query, result) {
   if (top && top.delta < -8 && query.strategy !== "aggressive") sideDetail += " Este palo se queda corto del número: para llegar hace falta más palo.";
   if (top && top.delta > 8 && (query.strategy === "safe" || longTrouble)) sideDetail += " Este palo pasa el número: apunta a la parte de delante.";
   let labels = { safe: "Conservador", normal: "Normal", aggressive: "Agresivo" };
+  let season = seasonAdjust(query.distance, query.season || "otoño");
+  let name = personal.playerName ?? query.playerName ?? "";
+  let signed = season.meters > 0 ? `+${season.meters}` : String(season.meters);
+  let seasonDetail = `${season.note} Regla: ${Math.round(season.factor * 100)}% (${signed} m sobre ${Math.round(Number(query.distance) || 0)} m).`;
   return {
     club,
     carry: top ? Math.round(top.carry) : null,
@@ -84,7 +184,13 @@ export function adviceFor(query, result) {
     sideDetail,
     strategy: query.strategy ?? "normal",
     strategyLabel: labels[query.strategy] ?? "Normal",
-    strategyDetail: strategyCopy(query.strategy, club),
+    strategyDetail: strategyCopy(query.strategy, club, name),
+    personalLine: personalLine(name, top, personal.shots || []),
+    season: season.id,
+    seasonLabel: season.label,
+    seasonSource: query.seasonSource === "manual" ? "manual" : "auto",
+    seasonMeters: season.meters,
+    seasonDetail,
     source: "reglas",
   };
 }
